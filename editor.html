@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>864Editor</title>
+    <title>音ゲー譜面エディタ ＆ ゲーム連携（全難易度統合版）</title>
     <style>
         :root {
             --bg-color: #0d1117;
@@ -1713,8 +1713,12 @@
                 ctx.restore();
             }
 
-            for (let i = 0; i < notes.length; i++) {
-                const n = notes[i]; if (n.lane > TOTAL_LANES) continue;
+            const orderedNotes = [
+                ...notes.filter(n => n.type === 'guide'),
+                ...notes.filter(n => n.type !== 'guide')
+            ];
+            for (let i = 0; i < orderedNotes.length; i++) {
+                const n = orderedNotes[i]; if (n.lane > TOTAL_LANES) continue;
                 if (n.type === 'long' || n.type === 'guide') {
                     if (n.endBeat < minRenderBeat - 1 || n.beat > maxRenderBeat + 1) continue;
                 } else { if (n.beat < minRenderBeat - 1 || n.beat > maxRenderBeat + 1) continue; }
