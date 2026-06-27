@@ -77,6 +77,14 @@
     .field label { color: var(--muted); font-size: 12px; font-weight: 700; }
     .manual-load { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .manual-load input { width: 100%; }
+    .section-title { font-size: 12px; font-weight: 900; color: var(--accent); letter-spacing: .08em; margin-bottom: 10px; }
+    .start-panel { border-color: #2c9cff; background: linear-gradient(180deg, #10243a, #101820); }
+    #start-button { width: 100%; min-height: 54px; font-size: 20px; background: #1680d8; border-color: #5cc1ff; box-shadow: 0 0 18px rgba(70,183,255,.22); }
+    #reset-settings { width: 100%; margin-top: 8px; }
+    .quick-settings { display: grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: 12px; }
+    .details-toggle { width: 100%; text-align: left; display:flex; justify-content:space-between; align-items:center; }
+    .details-content { display:none; margin-top: 12px; }
+    .details-content.open { display:block; }
 
     #game-screen { background: #030509; position: relative; align-items: stretch; justify-content: center; }
     #game-canvas { display: block; width: 100vw; height: 100vh; background: #030509; touch-action: none; }
@@ -167,71 +175,87 @@
     </section>
     <section class="detail-column">
       <div class="panel">
+        <div class="section-title">SELECTED SONG</div>
         <div class="song-title" id="selected-title">Loading...</div>
         <div class="song-meta" id="selected-meta">songs/index.json を読み込み中</div>
       </div>
       <div class="panel">
+        <div class="section-title">DIFFICULTY</div>
         <div class="field">
           <label>難易度</label>
           <div class="difficulty-row" id="difficulty-row"></div>
         </div>
       </div>
-      <div class="panel settings-grid">
-        <div class="field">
-          <label>ハイスコア</label>
-          <div id="high-score" class="song-title">0</div>
-        </div>
-        <div class="field">
-          <label>ノーツスピード</label>
-          <input id="note-speed" type="range" min="0.5" max="4" step="0.05" value="1.6">
-          <div class="small"><span id="note-speed-val">1.60</span>x</div>
-        </div>
-        <div class="field">
-          <label>音源オフセット補正 秒</label>
-          <input id="user-offset" type="number" step="0.01" value="0.00">
-        </div>
-        <div class="field">
-          <label>AUTO再生</label>
-          <select id="auto-play">
-            <option value="off">OFF</option>
-            <option value="on">ON</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>音源音量</label>
-          <input id="bgm-volume" type="range" min="0" max="1" step="0.01" value="0.8">
-          <div class="small"><span id="bgm-volume-val">80</span>%</div>
-        </div>
-        <div class="field">
-          <label>SE音量</label>
-          <input id="se-volume" type="range" min="0" max="1" step="0.01" value="0.7">
-          <div class="small"><span id="se-volume-val">70</span>%</div>
-        </div>
-        <div class="field">
-          <label>背景の明るさ</label>
-          <input id="bg-brightness" type="range" min="0" max="1" step="0.01" value="0.32">
-          <div class="small"><span id="bg-brightness-val">32</span>%</div>
-        </div>
-        <div class="field">
-          <label>背景のぼかし</label>
-          <input id="bg-blur" type="range" min="0" max="20" step="1" value="0">
-          <div class="small"><span id="bg-blur-val">0</span>px</div>
-        </div>
-        <div class="field">
-          <label>レーンの濃さ</label>
-          <input id="lane-opacity" type="range" min="0" max="1" step="0.01" value="0.82">
-          <div class="small"><span id="lane-opacity-val">82</span>%</div>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="small" style="margin-bottom:8px;">Mobile: tap lanes directly during play.</div>
+      <div class="panel start-panel">
+        <div class="section-title">START</div>
         <button class="primary" id="start-button">ゲームスタート</button>
-        <button id="reset-settings" style="margin-left:8px;">設定リセット</button>
-        <div class="small" style="margin-top:8px;">キー配置: <span id="key-summary"></span></div>
+        <div class="small" style="margin-top:8px; text-align:center;">Mobile: tap lanes directly during play.</div>
       </div>
+
       <div class="panel">
-        <div class="field">
-          <label>キーコンフィグ</label>
+        <div class="section-title">PLAY SETTINGS</div>
+        <div class="quick-settings">
+          <div class="field">
+            <label>ハイスコア</label>
+            <div id="high-score" class="song-title">0</div>
+          </div>
+          <div class="field">
+            <label>AUTO再生</label>
+            <select id="auto-play">
+              <option value="off">OFF</option>
+              <option value="on">ON</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>ノーツスピード</label>
+            <input id="note-speed" type="range" min="0.5" max="4" step="0.05" value="1.6">
+            <div class="small"><span id="note-speed-val">1.60</span>x</div>
+          </div>
+          <div class="field">
+            <label>音源オフセット補正 秒</label>
+            <input id="user-offset" type="number" step="0.01" value="0.00">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <button id="details-toggle" class="details-toggle">詳細設定 <span id="details-toggle-mark">+</span></button>
+        <div id="details-content" class="details-content">
+          <div class="settings-grid">
+            <div class="field">
+              <label>音源音量</label>
+              <input id="bgm-volume" type="range" min="0" max="1" step="0.01" value="0.8">
+              <div class="small"><span id="bgm-volume-val">80</span>%</div>
+            </div>
+            <div class="field">
+              <label>SE音量</label>
+              <input id="se-volume" type="range" min="0" max="1" step="0.01" value="0.7">
+              <div class="small"><span id="se-volume-val">70</span>%</div>
+            </div>
+            <div class="field">
+              <label>背景の明るさ</label>
+              <input id="bg-brightness" type="range" min="0" max="1" step="0.01" value="0.32">
+              <div class="small"><span id="bg-brightness-val">32</span>%</div>
+            </div>
+            <div class="field">
+              <label>背景のぼかし</label>
+              <input id="bg-blur" type="range" min="0" max="20" step="1" value="0">
+              <div class="small"><span id="bg-blur-val">0</span>px</div>
+            </div>
+            <div class="field">
+              <label>レーンの濃さ</label>
+              <input id="lane-opacity" type="range" min="0" max="1" step="0.01" value="0.82">
+              <div class="small"><span id="lane-opacity-val">82</span>%</div>
+            </div>
+          </div>
+          <button id="reset-settings">設定リセット</button>
+          <div class="small" style="margin-top:8px;">キー配置: <span id="key-summary"></span></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <button id="key-config-toggle" class="details-toggle">キーコンフィグ <span id="key-config-toggle-mark">+</span></button>
+        <div id="key-config-panel" class="details-content">
           <div class="small">ボタンを押してから割り当てたいキーを押してください。</div>
           <div id="key-config" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;"></div>
         </div>
@@ -407,6 +431,8 @@
     $('pause-lane-opacity').addEventListener('input', e => { settings.laneOpacity = parseFloat(e.target.value); syncBackgroundControls('pause'); saveSettings(); });
     $('start-button').addEventListener('click', startGame);
     $('reset-settings').addEventListener('click', resetSettings);
+    $('details-toggle').addEventListener('click', () => togglePanel('details-content', 'details-toggle-mark'));
+    $('key-config-toggle').addEventListener('click', () => togglePanel('key-config-panel', 'key-config-toggle-mark'));
     $('resume-button').addEventListener('click', resumeGame);
     $('restart-button').addEventListener('click', () => restartGame());
     $('back-select-button').addEventListener('click', returnToSelect);
@@ -445,6 +471,13 @@
   }
 
   let waitingKeyConfig = null;
+
+  function togglePanel(panelId, markId) {
+    const panel = $(panelId);
+    const mark = $(markId);
+    panel.classList.toggle('open');
+    if (mark) mark.textContent = panel.classList.contains('open') ? '-' : '+';
+  }
 
   function resetSettings() {
     settings = { noteSpeed: 1.6, userOffset: 0, auto: false, bgmVolume: 0.8, seVolume: 0.7, bgBrightness: 0.32, bgBlur: 0, laneOpacity: 0.82, keyMaps: null };
