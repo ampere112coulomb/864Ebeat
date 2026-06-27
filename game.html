@@ -1069,7 +1069,9 @@
     j.result = judgement;
     j.judgedAt = game.songTime;
     game.counts[judgement]++;
-    if (judgement !== 'miss' && judgement !== 'bad' && Math.abs(delta) > 0.001) {
+    const supportsFastSlow = j.kind === 'normal' || j.kind === 'longStart' || j.kind === 'longEnd';
+    const showFastSlow = supportsFastSlow && judgement !== 'miss' && judgement !== 'bad' && Math.abs(delta) >= 0.026;
+    if (showFastSlow) {
       if (delta < 0) game.fast++; else game.slow++;
     }
     updateClearGauge(judgement);
@@ -1077,7 +1079,7 @@
     else game.combo++;
     game.maxCombo = Math.max(game.maxCombo, game.combo);
     recalcScore();
-    showJudge(judgement, delta);
+    showJudge(judgement, showFastSlow ? delta : 0);
     $('hud-score').textContent = String(game.score);
     updateGaugeHud();
   }
