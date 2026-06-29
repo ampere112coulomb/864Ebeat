@@ -183,19 +183,6 @@
                 <input type="text" id="meta-title" value="New Song" oninput="syncToGame()">
             </div>
             <div class="control-group">
-                <label>ARTIST</label>
-                <input type="text" id="meta-artist" value="" placeholder="Song Artist" oninput="syncToGame()">
-            </div>
-            <div class="control-group">
-                <label>CHARTER</label>
-                <input type="text" id="meta-charter" value="" placeholder="Chart Author" oninput="syncToGame()">
-            </div>
-            <div class="control-group">
-                <label>BACKGROUND IMAGE</label>
-                <input type="text" id="meta-background" value="" placeholder="background.png">
-                <input type="file" id="background-selector" accept="image/*" onchange="setBackgroundFileName(this)">
-            </div>
-            <div class="control-group">
                 <label>難易度 (DIFFICULTY)</label>
                 <select id="meta-difficulty" onchange="switchDifficulty(this.value)">
                     <option value="Easy">Easy</option>
@@ -1117,11 +1104,6 @@
             gridSnap = val / 4;
         }
 
-        function setBackgroundFileName(input) {
-            const file = input.files && input.files[0];
-            if (file) document.getElementById('meta-background').value = file.name;
-        }
-
         function syncToGame() {
             const diff = currentDifficulty;
             const level = chartData[diff].level; 
@@ -1713,12 +1695,8 @@
                 ctx.restore();
             }
 
-            const orderedNotes = [
-                ...notes.filter(n => n.type === 'guide'),
-                ...notes.filter(n => n.type !== 'guide')
-            ];
-            for (let i = 0; i < orderedNotes.length; i++) {
-                const n = orderedNotes[i]; if (n.lane > TOTAL_LANES) continue;
+            for (let i = 0; i < notes.length; i++) {
+                const n = notes[i]; if (n.lane > TOTAL_LANES) continue;
                 if (n.type === 'long' || n.type === 'guide') {
                     if (n.endBeat < minRenderBeat - 1 || n.beat > maxRenderBeat + 1) continue;
                 } else { if (n.beat < minRenderBeat - 1 || n.beat > maxRenderBeat + 1) continue; }
@@ -1786,9 +1764,6 @@
                     line = line.trim(); if (!line || line.startsWith('#')) return;
                     
                     if (line.startsWith('TITLE:')) document.getElementById('meta-title').value = line.replace('TITLE:', '').trim();
-                    else if (line.startsWith('ARTIST:')) document.getElementById('meta-artist').value = line.replace('ARTIST:', '').trim();
-                    else if (line.startsWith('CHARTER:')) document.getElementById('meta-charter').value = line.replace('CHARTER:', '').trim();
-                    else if (line.startsWith('BACKGROUND:')) document.getElementById('meta-background').value = line.replace('BACKGROUND:', '').trim();
                     else if (line.startsWith('LANES:')) changeLaneCount(parseInt(line.replace('LANES:', '').trim(), 10));
                     else if (line.startsWith('BPM:')) document.getElementById('meta-bpm').value = line.replace('BPM:', '').trim();
                     else if (line.startsWith('TIMESIG:')) document.getElementById('meta-time-signature').value = normalizeTimeSignature(line.replace('TIMESIG:', '').trim());
@@ -1850,9 +1825,6 @@
         function exportChart() {
             let output = [];
             output.push(`TITLE: ${document.getElementById('meta-title').value}`);
-            output.push(`ARTIST: ${document.getElementById('meta-artist').value}`);
-            output.push(`CHARTER: ${document.getElementById('meta-charter').value}`);
-            output.push(`BACKGROUND: ${document.getElementById('meta-background').value}`);
             output.push(`LANES: ${TOTAL_LANES}`);
             output.push(`BPM: ${document.getElementById('meta-bpm').value}`);
             output.push(`TIMESIG: ${getInitialTimeSignature().text}`);
@@ -1915,6 +1887,7 @@
             const blob = new Blob([output.join('\r\n')], { type: 'text/plain' });
             const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = importedFileName;
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            if (typeof markEditorSaved === 'function') markEditorSaved();
         }
 
         function getCurrentBeat() {
@@ -1923,7 +1896,100 @@
             return timeToBeat((audioCtx.currentTime - startTime) * playbackRate);
         }
 
-        window.onload = initEditor;
+        
+        // ===== 864beat editor safety: leave confirm + autosave recovery =====
+        let hasUnsavedChanges = false;
+        let lastEditorBackupText = "";
+        const EDITOR_BACKUP_KEY = "864beat-editor-autosave-v1";
+
+        function collectEditorMetaForBackup() {
+            const ids = ["meta-title", "meta-artist", "meta-charter", "meta-background", "meta-bpm", "meta-offset", "meta-song", "meta-difficulty"];
+            const meta = {};
+            ids.forEach(id => { const el = document.getElementById(id); if (el) meta[id] = el.value; });
+            return meta;
+        }
+
+        function applyEditorMetaFromBackup(meta) {
+            if (!meta) return;
+            Object.keys(meta).forEach(id => { const el = document.getElementById(id); if (el) el.value = meta[id]; });
+        }
+
+        function createEditorBackupPayload() {
+            return { savedAt: new Date().toISOString(), importedFileName, currentDifficulty, totalLanes: TOTAL_LANES, chartData, meta: collectEditorMetaForBackup(), viewBeat, gridSnap, currentSnapSetting };
+        }
+
+        function saveEditorBackupNow() {
+            try {
+                const text = JSON.stringify(createEditorBackupPayload());
+                if (text !== lastEditorBackupText) { localStorage.setItem(EDITOR_BACKUP_KEY, text); lastEditorBackupText = text; }
+            } catch (err) { console.warn("editor autosave failed", err); }
+        }
+
+        function markEditorDirty() { hasUnsavedChanges = true; }
+        function markEditorSaved() { hasUnsavedChanges = false; saveEditorBackupNow(); }
+
+        function restoreEditorBackupIfNeeded() {
+            try {
+                const text = localStorage.getItem(EDITOR_BACKUP_KEY);
+                if (!text) return;
+                const backup = JSON.parse(text);
+                if (!backup || !backup.chartData) return;
+                const savedAt = backup.savedAt ? new Date(backup.savedAt).toLocaleString() : "unknown time";
+                if (!confirm("自動バックアップがあります。復元しますか？\n保存日時: " + savedAt)) return;
+                Object.keys(chartData).forEach(key => delete chartData[key]);
+                Object.keys(backup.chartData).forEach(key => { chartData[key] = backup.chartData[key]; });
+                if (backup.totalLanes) TOTAL_LANES = backup.totalLanes;
+                if (backup.importedFileName) importedFileName = backup.importedFileName;
+                if (backup.currentDifficulty && chartData[backup.currentDifficulty]) currentDifficulty = backup.currentDifficulty;
+                if (typeof backup.viewBeat === "number") viewBeat = backup.viewBeat;
+                if (typeof backup.gridSnap === "number") gridSnap = backup.gridSnap;
+                if (typeof backup.currentSnapSetting === "number") currentSnapSetting = backup.currentSnapSetting;
+                applyEditorMetaFromBackup(backup.meta);
+                if (chartData[currentDifficulty]) { notes = chartData[currentDifficulty].notes; changeEvents = chartData[currentDifficulty].changeEvents; feverSections = chartData[currentDifficulty].feverSections; }
+                const diffSelect = document.getElementById("meta-difficulty"); if (diffSelect) diffSelect.value = currentDifficulty;
+                const exportBtn = document.getElementById("export-btn"); if (exportBtn) exportBtn.textContent = "譜面を上書き保存 (" + importedFileName + ")";
+                if (typeof updateDifficultyTabs === "function") updateDifficultyTabs();
+                if (typeof syncToGame === "function") syncToGame();
+                if (typeof updateUI === "function") updateUI();
+                if (typeof resizeCanvas === "function") resizeCanvas();
+                hasUnsavedChanges = true;
+                saveEditorBackupNow();
+                alert("自動バックアップを復元しました。必要なら譜面を書き出してください。");
+            } catch (err) { console.warn("editor restore failed", err); }
+        }
+
+        function installEditorSafetyGuards() {
+            document.addEventListener("contextmenu", event => event.preventDefault(), true);
+            window.addEventListener("beforeunload", event => {
+                if (!hasUnsavedChanges) return;
+                saveEditorBackupNow();
+                event.preventDefault();
+                event.returnValue = "";
+            });
+            history.replaceState({ editorGuard: true }, "", location.href);
+            history.pushState({ editorGuard: true }, "", location.href);
+            window.addEventListener("popstate", () => {
+                if (!hasUnsavedChanges) return;
+                const ok = confirm("保存されていない変更があります。ページを離れますか？");
+                if (!ok) history.pushState({ editorGuard: true }, "", location.href);
+            });
+            document.addEventListener("input", markEditorDirty, true);
+            document.addEventListener("change", markEditorDirty, true);
+            document.addEventListener("pointerdown", event => {
+                if (event.target && event.target.closest && event.target.closest("button, canvas, input, select")) markEditorDirty();
+            }, true);
+            document.addEventListener("keydown", event => {
+                if (event.ctrlKey || event.metaKey || event.altKey) return;
+                markEditorDirty();
+            }, true);
+            setInterval(() => { if (hasUnsavedChanges) saveEditorBackupNow(); }, 3000);
+        }
+
+        window.onload = function() {
+            initEditor();
+            installEditorSafetyGuards();
+            setTimeout(restoreEditorBackupIfNeeded, 300);
+        };
     </script>
 </body>
 </html>
