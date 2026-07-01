@@ -218,6 +218,10 @@
                 <input type="text" id="meta-song" value="audio.ogg" placeholder="audio.ogg">
             </div>
             <div class="control-group">
+                <label>背景画像ファイル (BACKGROUND)</label>
+                <input type="text" id="meta-background" value="background.png" placeholder="background.png / jacket.jpg / image.webp">
+            </div>
+            <div class="control-group">
                 <label>背景動画ファイル (MOVIE)</label>
                 <input type="text" id="meta-movie" value="" placeholder="movie.mp4 / movie.webm / movie.mov">
             </div>
@@ -1773,6 +1777,7 @@
                     else if (line.startsWith('TIMESIG:')) document.getElementById('meta-time-signature').value = normalizeTimeSignature(line.replace('TIMESIG:', '').trim());
                     else if (line.startsWith('OFFSET:')) document.getElementById('meta-offset').value = line.replace('OFFSET:', '').trim();
                     else if (line.startsWith('SONG:')) document.getElementById('meta-song').value = line.replace('SONG:', '').trim();
+                    else if (line.toUpperCase().startsWith('BACKGROUND:')) document.getElementById('meta-background').value = line.replace(/^BACKGROUND:/i, '').trim();
                     else if (line.toUpperCase().startsWith('MOVIE:')) document.getElementById('meta-movie').value = line.replace(/^MOVIE:/i, '').trim();
                     
                     else if (line.startsWith('DIFFICULTY:')) {
@@ -1835,7 +1840,9 @@
             output.push(`TIMESIG: ${getInitialTimeSignature().text}`);
             output.push(`OFFSET: ${document.getElementById('meta-offset').value}`);
             output.push(`SONG: ${document.getElementById('meta-song').value}`);
-                        const movieLink = document.getElementById('meta-movie').value.trim();
+            const backgroundName = document.getElementById('meta-background').value.trim();
+            if (backgroundName) output.push(`BACKGROUND: ${backgroundName}`);
+            const movieLink = document.getElementById('meta-movie').value.trim();
             if (movieLink) output.push(`MOVIE: ${movieLink}`);
             output.push(``); 
 
@@ -1910,7 +1917,7 @@
         const EDITOR_BACKUP_KEY = "864beat-editor-autosave-v1";
 
         function collectEditorMetaForBackup() {
-            const ids = ["meta-title", "meta-artist", "meta-charter", "meta-background", "meta-bpm", "meta-offset", "meta-song", "meta-movie", "meta-difficulty"];
+            const ids = ["meta-title", "meta-artist", "meta-charter", "meta-background", "meta-bpm", "meta-offset", "meta-song", "meta-background", "meta-movie", "meta-difficulty"];
             const meta = {};
             ids.forEach(id => { const el = document.getElementById(id); if (el) meta[id] = el.value; });
             return meta;
