@@ -218,6 +218,10 @@
                 <input type="text" id="meta-song" value="audio.ogg" placeholder="audio.ogg">
             </div>
             <div class="control-group">
+                <label>YouTube背景リンク (MOVIE)</label>
+                <input type="text" id="meta-movie" value="" placeholder="https://youtu.be/... または https://www.youtube.com/watch?v=...">
+            </div>
+            <div class="control-group">
                 <label>オフセット (OFFSET)</label>
                 <input type="number" id="meta-offset" value="0.00" step="0.01">
             </div>
@@ -1769,6 +1773,7 @@
                     else if (line.startsWith('TIMESIG:')) document.getElementById('meta-time-signature').value = normalizeTimeSignature(line.replace('TIMESIG:', '').trim());
                     else if (line.startsWith('OFFSET:')) document.getElementById('meta-offset').value = line.replace('OFFSET:', '').trim();
                     else if (line.startsWith('SONG:')) document.getElementById('meta-song').value = line.replace('SONG:', '').trim();
+                    else if (line.toUpperCase().startsWith('MOVIE:')) document.getElementById('meta-movie').value = line.replace(/^MOVIE:/i, '').trim();
                     
                     else if (line.startsWith('DIFFICULTY:')) {
                         const dStr = line.replace('DIFFICULTY:', '').trim();
@@ -1830,6 +1835,8 @@
             output.push(`TIMESIG: ${getInitialTimeSignature().text}`);
             output.push(`OFFSET: ${document.getElementById('meta-offset').value}`);
             output.push(`SONG: ${document.getElementById('meta-song').value}`);
+                        const movieLink = document.getElementById('meta-movie').value.trim();
+            if (movieLink) output.push(`MOVIE: ${movieLink}`);
             output.push(``); 
 
             let exportedCount = 0;
@@ -1903,7 +1910,7 @@
         const EDITOR_BACKUP_KEY = "864beat-editor-autosave-v1";
 
         function collectEditorMetaForBackup() {
-            const ids = ["meta-title", "meta-artist", "meta-charter", "meta-background", "meta-bpm", "meta-offset", "meta-song", "meta-difficulty"];
+            const ids = ["meta-title", "meta-artist", "meta-charter", "meta-background", "meta-bpm", "meta-offset", "meta-song", "meta-movie", "meta-difficulty"];
             const meta = {};
             ids.forEach(id => { const el = document.getElementById(id); if (el) meta[id] = el.value; });
             return meta;
