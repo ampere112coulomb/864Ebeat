@@ -1191,9 +1191,9 @@
 
                     gameCtx.fillStyle = n.color ? n.color + "4c" : 'rgba(187, 128, 255, 0.4)';
                     gameCtx.fillRect(lx + 4, yEnd, gameLaneW - 8, yStart - yEnd);
-                    gameCtx.fillStyle = n.color || '#bc8cff';
+                    gameCtx.fillStyle = n.holdStart ? '#d4a727' : (n.color || '#bc8cff');
                     gameCtx.fillRect(lx + 2, yStart - 4, gameLaneW - 4, 8);
-                    gameCtx.fillStyle = n.holdMode === 'holdEnd' ? '#d4a727' : (n.color || '#bc8cff');
+                    gameCtx.fillStyle = (n.holdMode === 'holdEnd' || n.holdEnd) ? '#d4a727' : (n.color || '#bc8cff');
                     gameCtx.fillRect(lx + 2, yEnd - 4, gameLaneW - 4, 8);
                 } else {
                     const ny = beatToGameY(n.beat, viewBeat, judgeY);
@@ -1472,11 +1472,14 @@
                 if (endpointLongIdx >= 0) {
                     recordUndo();
                     const target = notes[endpointLongIdx];
-                    if (Math.abs(snappedBeat - target.endBeat) < Math.abs(snappedBeat - target.beat)) {
-                        target.holdMode = 'holdEnd';
+                    if (target.holdMode === 'holdEnd') target.holdEnd = true;
+                    const isEnd = Math.abs(snappedBeat - target.endBeat) < Math.abs(snappedBeat - target.beat);
+                    if (isEnd) {
+                        target.holdEnd = !target.holdEnd;
                     } else {
-                        delete target.holdMode;
+                        target.holdStart = !target.holdStart;
                     }
+                    delete target.holdMode;
                     return;
                 }
             }
@@ -1740,9 +1743,9 @@
                     const ys = beatToY(n.beat); const ye = beatToY(n.endBeat);
                     ctx.fillStyle = customColor ? customColor + "4c" : 'rgba(187, 128, 255, 0.3)';
                     ctx.fillRect(x + 8, ye, LANE_WIDTH - 16, ys - ye);
-                    ctx.fillStyle = customColor || '#bc8cff';
+                    ctx.fillStyle = n.holdStart ? '#d4a727' : (customColor || '#bc8cff');
                     ctx.fillRect(x + 4, ys - 6, LANE_WIDTH - 8, 12);
-                    ctx.fillStyle = n.holdMode === 'holdEnd' ? '#d4a727' : (customColor || '#bc8cff');
+                    ctx.fillStyle = (n.holdMode === 'holdEnd' || n.holdEnd) ? '#d4a727' : (customColor || '#bc8cff');
                     ctx.fillRect(x + 4, ye - 6, LANE_WIDTH - 8, 12);
                 } else if (n.type === 'guide') {
                     const ys = beatToY(n.beat); const ye = beatToY(n.endBeat);
@@ -1820,10 +1823,13 @@
                         const beatStr = parts[0].trim(); const lane = parseInt(parts[1].trim(), 10);
                         const color = parts[2] ? parts[2].trim() : undefined;
                         if (beatStr.includes('-')) {
-                            const bParts = beatStr.split('-'); const sB = parseFloat(bParts[0]); let eBStr = bParts[1];
-                            let type = 'long'; let holdMode = ''; if (eBStr.endsWith('G')) { type = 'guide'; eBStr = eBStr.replace('G',''); } else if (eBStr.endsWith('H')) { holdMode = 'holdEnd'; eBStr = eBStr.replace('H',''); }
-                            const note = { beat: sB, endBeat: parseFloat(eBStr), lane: lane, type: type };
-                            if (holdMode) note.holdMode = holdMode;
+                            const bParts = beatStr.split('-'); let sBStr = bParts[0]; let eBStr = bParts[1];
+                            let type = 'long'; let holdStart = false; let holdEnd = false;
+                            if (sBStr.endsWith('H')) { holdStart = true; sBStr = sBStr.replace('H',''); }
+                            if (eBStr.endsWith('G')) { type = 'guide'; eBStr = eBStr.replace('G',''); } else if (eBStr.endsWith('H')) { holdEnd = true; eBStr = eBStr.replace('H',''); }
+                            const note = { beat: parseFloat(sBStr), endBeat: parseFloat(eBStr), lane: lane, type: type };
+                            if (holdStart) note.holdStart = true;
+                            if (holdEnd) note.holdEnd = true;
                             if (color) note.color = color;
                             if (type === 'guide') {
                                 const extras = parts.slice(3).map(p => p.trim()).filter(Boolean);
@@ -1888,8 +1894,10 @@
                     if (n.lane > TOTAL_LANES) return;
                     let lineStr = "";
                     if (n.type === 'long' || n.type === 'guide') {
-                        const suffix = (n.type === 'guide') ? 'G' : (n.holdMode === 'holdEnd' ? 'H' : '');
-                        lineStr = `${n.beat.toFixed(2)}-${n.endBeat.toFixed(2)}${suffix},${n.lane}`;
+                        if (n.holdMode === 'holdEnd') n.holdEnd = true;
+                        const startSuffix = (n.type === 'long' && n.holdStart) ? 'H' : '';
+                        const endSuffix = (n.type === 'guide') ? 'G' : ((n.type === 'long' && n.holdEnd) ? 'H' : '');
+                        lineStr = `${n.beat.toFixed(2)}${startSuffix}-${n.endBeat.toFixed(2)}${endSuffix},${n.lane}`;
                     } else {
                         const suffix = (n.type === 'hold') ? 'H' : (n.type === 'damage' ? 'D' : '');
                         lineStr = `${n.beat.toFixed(2)}${suffix},${n.lane}`;
