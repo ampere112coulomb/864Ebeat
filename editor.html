@@ -1191,10 +1191,12 @@
 
                     gameCtx.fillStyle = n.color ? n.color + "4c" : 'rgba(187, 128, 255, 0.4)';
                     gameCtx.fillRect(lx + 4, yEnd, gameLaneW - 8, yStart - yEnd);
-                    gameCtx.fillStyle = n.holdStart ? '#d4a727' : (n.color || '#bc8cff');
-                    gameCtx.fillRect(lx + 2, yStart - 4, gameLaneW - 4, 8);
-                    gameCtx.fillStyle = (n.holdMode === 'holdEnd' || n.holdEnd) ? '#d4a727' : (n.color || '#bc8cff');
-                    gameCtx.fillRect(lx + 2, yEnd - 4, gameLaneW - 4, 8);
+                    const startIsHold = !!n.holdStart;
+                    const endIsHold = n.holdMode === 'holdEnd' || !!n.holdEnd;
+                    gameCtx.fillStyle = startIsHold ? '#d4a727' : (n.color || '#bc8cff');
+                    gameCtx.fillRect(lx + 2, yStart - (startIsHold ? 6 : 4), gameLaneW - 4, startIsHold ? 12 : 8);
+                    gameCtx.fillStyle = endIsHold ? '#d4a727' : (n.color || '#bc8cff');
+                    gameCtx.fillRect(lx + 2, yEnd - (endIsHold ? 6 : 4), gameLaneW - 4, endIsHold ? 12 : 8);
                 } else {
                     const ny = beatToGameY(n.beat, viewBeat, judgeY);
                     if (n.type === 'normal') gameCtx.fillStyle = n.color || ((n.lane % 2 === 1) ? '#ffffff' : '#58a6ff');
@@ -1468,18 +1470,24 @@
             }
 
             if (currentNoteType === 'hold') {
-                const endpointLongIdx = notes.findIndex(n => n.lane === lane && n.type === 'long' && (Math.abs(snappedBeat - n.beat) < 0.02 || Math.abs(snappedBeat - n.endBeat) < 0.02));
+                const endpointLongIdx = notes.findIndex(n => {
+                    if (n.lane !== lane || n.type !== 'long') return false;
+                    const tolerance = Math.max(0.03, 18 / BEAT_HEIGHT);
+                    return Math.abs(snappedBeat - n.beat) <= tolerance || Math.abs(snappedBeat - n.endBeat) <= tolerance;
+                });
                 if (endpointLongIdx >= 0) {
                     recordUndo();
                     const target = notes[endpointLongIdx];
                     if (target.holdMode === 'holdEnd') target.holdEnd = true;
-                    const isEnd = Math.abs(snappedBeat - target.endBeat) < Math.abs(snappedBeat - target.beat);
-                    if (isEnd) {
+                    const startDist = Math.abs(snappedBeat - target.beat);
+                    const endDist = Math.abs(snappedBeat - target.endBeat);
+                    if (endDist < startDist) {
                         target.holdEnd = !target.holdEnd;
                     } else {
                         target.holdStart = !target.holdStart;
                     }
                     delete target.holdMode;
+                    draw();
                     return;
                 }
             }
@@ -1743,10 +1751,12 @@
                     const ys = beatToY(n.beat); const ye = beatToY(n.endBeat);
                     ctx.fillStyle = customColor ? customColor + "4c" : 'rgba(187, 128, 255, 0.3)';
                     ctx.fillRect(x + 8, ye, LANE_WIDTH - 16, ys - ye);
-                    ctx.fillStyle = n.holdStart ? '#d4a727' : (customColor || '#bc8cff');
-                    ctx.fillRect(x + 4, ys - 6, LANE_WIDTH - 8, 12);
-                    ctx.fillStyle = (n.holdMode === 'holdEnd' || n.holdEnd) ? '#d4a727' : (customColor || '#bc8cff');
-                    ctx.fillRect(x + 4, ye - 6, LANE_WIDTH - 8, 12);
+                    const startIsHold = !!n.holdStart;
+                    const endIsHold = n.holdMode === 'holdEnd' || !!n.holdEnd;
+                    ctx.fillStyle = startIsHold ? '#d4a727' : (customColor || '#bc8cff');
+                    ctx.fillRect(x + 4, ys - (startIsHold ? 8 : 6), LANE_WIDTH - 8, startIsHold ? 16 : 12);
+                    ctx.fillStyle = endIsHold ? '#d4a727' : (customColor || '#bc8cff');
+                    ctx.fillRect(x + 4, ye - (endIsHold ? 8 : 6), LANE_WIDTH - 8, endIsHold ? 16 : 12);
                 } else if (n.type === 'guide') {
                     const ys = beatToY(n.beat); const ye = beatToY(n.endBeat);
                     fillGuideRect(ctx, x, ys, ye, LANE_WIDTH, n);
