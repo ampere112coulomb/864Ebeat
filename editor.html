@@ -1803,7 +1803,7 @@
                     ctx.fillStyle = 'rgba(16, 185, 129, 0.1)'; ctx.fillRect(x, Math.min(ys, ye), LANE_WIDTH, Math.abs(ys - ye));
                     ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)'; ctx.lineWidth = 2; ctx.strokeRect(x, Math.min(ys, ye), LANE_WIDTH, Math.abs(ys - ye));
                 } else if (currentNoteType === 'laneOpacity') {
-                    const left = START_X + (n.lane - 1) * LANE_WIDTH; const width = LANE_WIDTH;
+                    const left = START_X + (longStartLane - 1) * LANE_WIDTH; const width = LANE_WIDTH;
                     ctx.fillStyle = 'rgba(88, 166, 255, 0.14)'; ctx.fillRect(left, Math.min(ys, ye), width, Math.abs(ys - ye));
                     ctx.strokeStyle = 'rgba(88, 166, 255, 0.65)'; ctx.lineWidth = 2; ctx.strokeRect(left, Math.min(ys, ye), width, Math.abs(ys - ye));
                 }
@@ -1844,14 +1844,14 @@
                     ctx.strokeStyle = getGuideColor(n); ctx.lineWidth = 2; ctx.strokeRect(x, ye, LANE_WIDTH, ys - ye);
                 } else if (n.type === 'laneOpacity') {
                     const ys = beatToY(n.beat); const ye = beatToY(n.endBeat);
-                    const left = START_X; const width = TOTAL_LANES * LANE_WIDTH;
+                    const left = START_X + (n.lane - 1) * LANE_WIDTH; const width = LANE_WIDTH;
                     const os = getLaneOpacityStartValue(n); const oe = getLaneOpacityEndValue(n);
                     const grad = ctx.createLinearGradient(0, ys, 0, ye);
                     grad.addColorStop(0, 'rgba(88,166,255,0.08)'); grad.addColorStop(1, 'rgba(88,166,255,0.24)');
                     ctx.fillStyle = grad; ctx.fillRect(left, Math.min(ys, ye), width, Math.abs(ys - ye));
                     ctx.strokeStyle = 'rgba(88,166,255,0.8)'; ctx.lineWidth = 2; ctx.strokeRect(left, Math.min(ys, ye), width, Math.abs(ys - ye));
                     ctx.fillStyle = '#58a6ff'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'left';
-                    ctx.fillText('LANE ' + os + '~' + oe, left + width + 8, Math.min(ys, ye) + 14);
+                    ctx.fillText('LANE ' + n.lane + ' ' + os + '~' + oe, left + width + 8, Math.min(ys, ye) + 14);
                 }
                 if (isSelected) {
                     const y = beatToY(n.beat); ctx.strokeStyle = '#ffeb3b'; ctx.lineWidth = 2;
@@ -1956,9 +1956,18 @@
                     for (let i = 0; i < laneEvents.length; i++) {
                         const e = laneEvents[i];
                         const spec = laneOpacitySpec(e);
-                        const next = laneEvents[i + 1];
-                        if (!spec.range || !next || next.beat <= e.beat) continue;
-                        data.notes.push({ beat: e.beat, endBeat: next.beat, lane: 1, type: 'laneOpacity', opacityStart: spec.from, opacityEnd: spec.to });
+                        if (!spec.range) continue;
+                        const targetLanes = spec.lane === null
+                            ? Array.from({ length: TOTAL_LANES }, (_, idx) => idx + 1)
+                            : [spec.lane];
+                        targetLanes.forEach(targetLane => {
+                            const next = laneEvents.slice(i + 1).find(ne => {
+                                const nextSpec = laneOpacitySpec(ne);
+                                return (ne.beat || 0) > (e.beat || 0) && (nextSpec.lane === null || nextSpec.lane === targetLane);
+                            });
+                            if (!next || next.beat <= e.beat) return;
+                            data.notes.push({ beat: e.beat, endBeat: next.beat, lane: targetLane, type: 'laneOpacity', opacityStart: spec.from, opacityEnd: spec.to });
+                        });
                     }
                 });
 
@@ -1997,8 +2006,16 @@
                 output.push(`LEVEL: ${dData.level}`);
                 output.push(`// ==========================================`);
 
-                dData.changeEvents.sort((a,b) => (a.beat || 0) - (b.beat || 0));
-                dData.changeEvents.forEach(e => { output.push(`CHANGE: ${e.beat.toFixed(2)}, ${e.type}, ${formatChangeValue(e)}`); });
+                const exportedChanges = dData.changeEvents.slice();
+                dData.notes.forEach(n => {
+                    if (n.type !== 'laneOpacity' || n.lane > TOTAL_LANES) return;
+                    const startOpacity = getLaneOpacityStartValue(n);
+                    const endOpacity = getLaneOpacityEndValue(n);
+                    exportedChanges.push({ beat: n.beat, type: 'LANE', val: `${n.lane},${startOpacity}~${endOpacity}` });
+                    exportedChanges.push({ beat: n.endBeat, type: 'LANE', val: `${n.lane},${endOpacity}` });
+                });
+                exportedChanges.sort((a,b) => (a.beat || 0) - (b.beat || 0));
+                exportedChanges.forEach(e => { output.push(`CHANGE: ${e.beat.toFixed(2)}, ${e.type}, ${formatChangeValue(e)}`); });
                 
                 dData.feverSections.sort((a,b) => a.startBeat - b.startBeat);
                 dData.feverSections.forEach(fs => { output.push(`FEVER: ${fs.startBeat.toFixed(2)}-${fs.endBeat.toFixed(2)}`); });
