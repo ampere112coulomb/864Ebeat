@@ -364,6 +364,7 @@
                         <option value="BS">BS (ソフラン速度倍率)</option>
                         <option value="TS">TS (多重スクロール倍率)</option>
                         <option value="SIG">Time Signature (4/4, 6/8)</option>
+                        <option value="LANE">Lane Opacity (0 / 100~50)</option>
                     </select>
                     <input type="text" id="batch-gimmick-val" value="1.0">
                     <button onclick="applyBatchGimmick()" style="background: var(--accent-active);">ギミックを適用</button>
@@ -410,6 +411,7 @@
                 <option value="BS">BS変化 (弐寺風ソフラン)</option>
                 <option value="TS">TS変化 (太鼓風多重スクロール)</option>
                 <option value="SIG">Time Signature (4/4, 6/8)</option>
+                        <option value="LANE">Lane Opacity (0 / 100~50)</option>
             </select>
         </div>
         <div class="control-group">
@@ -518,10 +520,37 @@
         function normalizeTimeSignature(value) { return parseTimeSignature(value).text; }
         function parseChangeValue(type, rawValue) {
             if (type === 'SIG') return normalizeTimeSignature(rawValue);
+            if (type === 'LANE') return String(rawValue || '100').trim();
             const numeric = parseFloat(rawValue);
             return Number.isFinite(numeric) ? numeric : 0;
         }
         function formatChangeValue(event) { return event.type === 'SIG' ? normalizeTimeSignature(event.val) : event.val; }
+        function laneOpacityNumber(value, fallback = 100) {
+            const n = parseFloat(value);
+            if (!Number.isFinite(n)) return fallback;
+            return Math.max(0, Math.min(100, n));
+        }
+        function laneOpacitySpec(event) {
+            const raw = String(event && event.val !== undefined ? event.val : '100').trim();
+            const parts = raw.split('~');
+            const from = laneOpacityNumber(parts[0], 100);
+            const to = parts.length > 1 ? laneOpacityNumber(parts[1], from) : from;
+            return { from, to, range: parts.length > 1 };
+        }
+        function laneOpacityAtBeat(beat) {
+            const events = changeEvents.filter(e => e.type === 'LANE').sort((a,b) => (a.beat || 0) - (b.beat || 0));
+            if (!events.length) return 1;
+            let current = null, next = null;
+            for (let i = 0; i < events.length; i++) {
+                if ((events[i].beat || 0) <= beat) { current = events[i]; next = events[i + 1] || null; }
+                else break;
+            }
+            if (!current) return 1;
+            const spec = laneOpacitySpec(current);
+            if (!spec.range || !next || (next.beat || 0) <= (current.beat || 0)) return spec.to / 100;
+            const p = Math.max(0, Math.min(1, (beat - current.beat) / (next.beat - current.beat)));
+            return (spec.from + (spec.to - spec.from) * p) / 100;
+        }
         function getTimeSignatureEvents() {
             return changeEvents.filter(e => e.type === 'SIG')
                 .map(e => ({ beat: e.beat || 0, sig: parseTimeSignature(e.val) }))
@@ -1644,9 +1673,12 @@
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const laneOpacityFactor = laneOpacityAtBeat(viewBeat);
+            ctx.fillStyle = 'rgba(2,4,8,' + (0.3 * laneOpacityFactor) + ')';
+            ctx.fillRect(START_X, 0, TOTAL_LANES * LANE_WIDTH, canvas.height);
             for (let i = 0; i < TOTAL_LANES; i++) {
                 const x = START_X + i * LANE_WIDTH;
-                ctx.strokeStyle = '#21262d'; ctx.lineWidth = 1; ctx.strokeRect(x, 0, LANE_WIDTH, canvas.height);
+                ctx.strokeStyle = 'rgba(33,38,45,' + laneOpacityFactor + ')'; ctx.lineWidth = 1; ctx.strokeRect(x, 0, LANE_WIDTH, canvas.height);
             }
             const minRenderBeat = yToBeat(canvas.height); const maxRenderBeat = yToBeat(0);
 
@@ -2043,3 +2075,4 @@
     </script>
 </body>
 </html>
+
