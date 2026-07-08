@@ -1718,11 +1718,11 @@
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const laneOpacityFactor = laneOpacityAtBeat(viewBeat);
-            ctx.fillStyle = 'rgba(2,4,8,' + (0.3 * laneOpacityFactor) + ')';
-            ctx.fillRect(START_X, 0, TOTAL_LANES * LANE_WIDTH, canvas.height);
             for (let i = 0; i < TOTAL_LANES; i++) {
                 const x = START_X + i * LANE_WIDTH;
+                const laneOpacityFactor = laneOpacityAtBeat(viewBeat, i + 1);
+                ctx.fillStyle = 'rgba(2,4,8,' + (0.08 * laneOpacityFactor) + ')';
+                ctx.fillRect(x, 0, LANE_WIDTH, canvas.height);
                 ctx.strokeStyle = 'rgba(33,38,45,' + laneOpacityFactor + ')'; ctx.lineWidth = 1; ctx.strokeRect(x, 0, LANE_WIDTH, canvas.height);
             }
             const minRenderBeat = yToBeat(canvas.height); const maxRenderBeat = yToBeat(0);
@@ -2148,6 +2148,7 @@
     </script>
 </body>
 </html>
+
 
 
 
