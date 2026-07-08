@@ -546,7 +546,7 @@
             return { lane, from, to, range: parts.length > 1 };
         }
         function laneOpacityAtBeat(beat, lane = null) {
-            const bands = notes.filter(n => n.type === 'laneOpacity' && (lane === null || n.lane === lane) && beat >= n.beat && beat <= n.endBeat).sort((a,b) => (b.beat || 0) - (a.beat || 0));
+            const bands = notes.filter(n => n.type === 'laneOpacity' && beat >= n.beat && beat <= n.endBeat).sort((a,b) => (b.beat || 0) - (a.beat || 0));
             if (bands.length) {
                 const n = bands[0];
                 const from = getLaneOpacityStartValue(n);
@@ -557,8 +557,7 @@
             }
             const events = changeEvents.filter(e => {
                 if (e.type !== 'LANE') return false;
-                const spec = laneOpacitySpec(e);
-                return lane === null || spec.lane === null || spec.lane === lane;
+                return true;
             }).sort((a,b) => (a.beat || 0) - (b.beat || 0));
             if (!events.length) return 1;
             let current = null, next = null;
@@ -1482,16 +1481,16 @@
             if (lane < 1 || lane > TOTAL_LANES) return;
 
             if (currentNoteType === 'laneOpacity') {
-                const existingIdx = notes.findIndex(n => n.type === 'laneOpacity' && n.lane === lane && snappedBeat >= n.beat && snappedBeat <= n.endBeat);
+                const existingIdx = notes.findIndex(n => n.type === 'laneOpacity' && snappedBeat >= n.beat && snappedBeat <= n.endBeat);
                 if (existingIdx >= 0 && longStartBeat === null) { recordUndo(); notes.splice(existingIdx, 1); return; }
                 if (longStartBeat === null) {
-                    longStartBeat = snappedBeat; longStartLane = lane;
+                    longStartBeat = snappedBeat; longStartLane = 1;
                 } else {
                     let bStart = Math.min(longStartBeat, snappedBeat);
                     let bEnd = Math.max(longStartBeat, snappedBeat);
                     if (bStart === bEnd) bEnd += 0.25;
                     recordUndo();
-                    notes.push({ beat: bStart, endBeat: bEnd, lane: longStartLane, type: 'laneOpacity', opacityStart: getLaneOpacityStartValue(), opacityEnd: getLaneOpacityEndValue() });
+                    notes.push({ beat: bStart, endBeat: bEnd, lane: 1, type: 'laneOpacity', opacityStart: getLaneOpacityStartValue(), opacityEnd: getLaneOpacityEndValue() });
                     longStartBeat = null; longStartLane = null;
                 }
                 return;
@@ -1606,6 +1605,11 @@
                 if (selectType === 'guide' && n.type !== 'guide') return false;
                 if (selectType === 'laneOpacity' && n.type !== 'laneOpacity') return false;
                 if (selectType === 'note' && (n.type === 'guide' || n.type === 'laneOpacity')) return false;
+                if (selectType === 'laneOpacity') {
+                    const top = Math.min(beatToY(n.beat), beatToY(n.endBeat));
+                    const bottom = Math.max(beatToY(n.beat), beatToY(n.endBeat));
+                    return x2 >= START_X && x1 <= START_X + TOTAL_LANES * LANE_WIDTH && bottom >= y1 && top <= y2;
+                }
                 const nx = START_X + (n.lane - 1) * LANE_WIDTH + LANE_WIDTH / 2; const ny = beatToY(n.beat);
                 return nx >= x1 && nx <= x2 && ny >= y1 && ny <= y2;
             });
@@ -1803,7 +1807,7 @@
                     ctx.fillStyle = 'rgba(16, 185, 129, 0.1)'; ctx.fillRect(x, Math.min(ys, ye), LANE_WIDTH, Math.abs(ys - ye));
                     ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)'; ctx.lineWidth = 2; ctx.strokeRect(x, Math.min(ys, ye), LANE_WIDTH, Math.abs(ys - ye));
                 } else if (currentNoteType === 'laneOpacity') {
-                    const left = START_X + (longStartLane - 1) * LANE_WIDTH; const width = LANE_WIDTH;
+                    const left = START_X; const width = TOTAL_LANES * LANE_WIDTH;
                     ctx.fillStyle = 'rgba(88, 166, 255, 0.14)'; ctx.fillRect(left, Math.min(ys, ye), width, Math.abs(ys - ye));
                     ctx.strokeStyle = 'rgba(88, 166, 255, 0.65)'; ctx.lineWidth = 2; ctx.strokeRect(left, Math.min(ys, ye), width, Math.abs(ys - ye));
                 }
@@ -1844,18 +1848,18 @@
                     ctx.strokeStyle = getGuideColor(n); ctx.lineWidth = 2; ctx.strokeRect(x, ye, LANE_WIDTH, ys - ye);
                 } else if (n.type === 'laneOpacity') {
                     const ys = beatToY(n.beat); const ye = beatToY(n.endBeat);
-                    const left = START_X + (n.lane - 1) * LANE_WIDTH; const width = LANE_WIDTH;
+                    const left = START_X; const width = TOTAL_LANES * LANE_WIDTH;
                     const os = getLaneOpacityStartValue(n); const oe = getLaneOpacityEndValue(n);
                     const grad = ctx.createLinearGradient(0, ys, 0, ye);
                     grad.addColorStop(0, 'rgba(88,166,255,0.08)'); grad.addColorStop(1, 'rgba(88,166,255,0.24)');
                     ctx.fillStyle = grad; ctx.fillRect(left, Math.min(ys, ye), width, Math.abs(ys - ye));
                     ctx.strokeStyle = 'rgba(88,166,255,0.8)'; ctx.lineWidth = 2; ctx.strokeRect(left, Math.min(ys, ye), width, Math.abs(ys - ye));
                     ctx.fillStyle = '#58a6ff'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'left';
-                    ctx.fillText('LANE ' + n.lane + ' ' + os + '~' + oe, left + width + 8, Math.min(ys, ye) + 14);
+                    ctx.fillText('LANE ' + os + '~' + oe, left + width + 8, Math.min(ys, ye) + 14);
                 }
                 if (isSelected) {
                     const y = beatToY(n.beat); ctx.strokeStyle = '#ffeb3b'; ctx.lineWidth = 2;
-                    if(n.type==='long'||n.type==='guide'||n.type==='laneOpacity'){ const ye=beatToY(n.endBeat); const sx=n.type==='laneOpacity'?START_X+(n.lane-1)*LANE_WIDTH:x+2; const sw=n.type==='laneOpacity'?LANE_WIDTH:LANE_WIDTH-4; ctx.strokeRect(sx, ye-8, sw, (y-ye)+16); }
+                    if(n.type==='long'||n.type==='guide'||n.type==='laneOpacity'){ const ye=beatToY(n.endBeat); const sx=n.type==='laneOpacity'?START_X:x+2; const sw=n.type==='laneOpacity'?TOTAL_LANES*LANE_WIDTH:LANE_WIDTH-4; ctx.strokeRect(sx, ye-8, sw, (y-ye)+16); }
                     else { ctx.strokeRect(x + 2, y - 8, LANE_WIDTH - 4, 16); }
                 }
             }
@@ -1957,17 +1961,10 @@
                         const e = laneEvents[i];
                         const spec = laneOpacitySpec(e);
                         if (!spec.range) continue;
-                        const targetLanes = spec.lane === null
-                            ? Array.from({ length: TOTAL_LANES }, (_, idx) => idx + 1)
-                            : [spec.lane];
-                        targetLanes.forEach(targetLane => {
-                            const next = laneEvents.slice(i + 1).find(ne => {
-                                const nextSpec = laneOpacitySpec(ne);
-                                return (ne.beat || 0) > (e.beat || 0) && (nextSpec.lane === null || nextSpec.lane === targetLane);
-                            });
-                            if (!next || next.beat <= e.beat) return;
-                            data.notes.push({ beat: e.beat, endBeat: next.beat, lane: targetLane, type: 'laneOpacity', opacityStart: spec.from, opacityEnd: spec.to });
-                        });
+                        const next = laneEvents.slice(i + 1).find(ne => (ne.beat || 0) > (e.beat || 0));
+                        if (!next || next.beat <= e.beat) continue;
+                        const duplicate = data.notes.some(n => n.type === 'laneOpacity' && Math.abs(n.beat - e.beat) < 0.01 && Math.abs(n.endBeat - next.beat) < 0.01);
+                        if (!duplicate) data.notes.push({ beat: e.beat, endBeat: next.beat, lane: 1, type: 'laneOpacity', opacityStart: spec.from, opacityEnd: spec.to });
                     }
                 });
 
@@ -2011,8 +2008,8 @@
                     if (n.type !== 'laneOpacity' || n.lane > TOTAL_LANES) return;
                     const startOpacity = getLaneOpacityStartValue(n);
                     const endOpacity = getLaneOpacityEndValue(n);
-                    exportedChanges.push({ beat: n.beat, type: 'LANE', val: `${n.lane},${startOpacity}~${endOpacity}` });
-                    exportedChanges.push({ beat: n.endBeat, type: 'LANE', val: `${n.lane},${endOpacity}` });
+                    exportedChanges.push({ beat: n.beat, type: 'LANE', val: `${startOpacity}~${endOpacity}` });
+                    exportedChanges.push({ beat: n.endBeat, type: 'LANE', val: `${endOpacity}` });
                 });
                 exportedChanges.sort((a,b) => (a.beat || 0) - (b.beat || 0));
                 exportedChanges.forEach(e => { output.push(`CHANGE: ${e.beat.toFixed(2)}, ${e.type}, ${formatChangeValue(e)}`); });
