@@ -260,6 +260,7 @@
                 <button id="btn-long" onclick="setNoteType('long')">Long (紫)</button>
                 <button id="btn-damage" onclick="setNoteType('damage')">Damage (赤)</button>
                 <button id="btn-guide" onclick="setNoteType('guide')" style="background: #1f3a52;">Guide (緑帯)</button>
+                <button id="btn-laneOpacity" onclick="setNoteType('laneOpacity')" style="background:#314057;">Lane Opacity</button>
             </div>
             <div class="control-group" style="background: rgba(16, 185, 129, 0.08); padding: 8px; border-radius: 6px; border: 1px solid rgba(16,185,129,0.25);">
                 <label>GUIDE NOTE COLOR</label>
@@ -538,6 +539,15 @@
             return { from, to, range: parts.length > 1 };
         }
         function laneOpacityAtBeat(beat) {
+            const bands = notes.filter(n => n.type === 'laneOpacity' && beat >= n.beat && beat <= n.endBeat).sort((a,b) => (b.beat || 0) - (a.beat || 0));
+            if (bands.length) {
+                const n = bands[0];
+                const from = getLaneOpacityStartValue(n);
+                const to = getLaneOpacityEndValue(n);
+                const span = Math.max(0.0001, n.endBeat - n.beat);
+                const p = Math.max(0, Math.min(1, (beat - n.beat) / span));
+                return (from + (to - from) * p) / 100;
+            }
             const events = changeEvents.filter(e => e.type === 'LANE').sort((a,b) => (a.beat || 0) - (b.beat || 0));
             if (!events.length) return 1;
             let current = null, next = null;
@@ -550,6 +560,12 @@
             if (!spec.range || !next || (next.beat || 0) <= (current.beat || 0)) return spec.to / 100;
             const p = Math.max(0, Math.min(1, (beat - current.beat) / (next.beat - current.beat)));
             return (spec.from + (spec.to - spec.from) * p) / 100;
+        }
+        function getLaneOpacityStartValue(note) {
+            return laneOpacityNumber(note && note.opacityStart !== undefined ? note.opacityStart : document.getElementById('lane-opacity-start')?.value, 100);
+        }
+        function getLaneOpacityEndValue(note) {
+            return laneOpacityNumber(note && note.opacityEnd !== undefined ? note.opacityEnd : document.getElementById('lane-opacity-end')?.value, 50);
         }
         function getTimeSignatureEvents() {
             return changeEvents.filter(e => e.type === 'SIG')
@@ -1454,6 +1470,22 @@
             isSelectMode = false;
             if (lane < 1 || lane > TOTAL_LANES) return;
 
+            if (currentNoteType === 'laneOpacity') {
+                const existingIdx = notes.findIndex(n => n.type === 'laneOpacity' && snappedBeat >= n.beat && snappedBeat <= n.endBeat);
+                if (existingIdx >= 0 && longStartBeat === null) { recordUndo(); notes.splice(existingIdx, 1); return; }
+                if (longStartBeat === null) {
+                    longStartBeat = snappedBeat; longStartLane = 1;
+                } else {
+                    let bStart = Math.min(longStartBeat, snappedBeat);
+                    let bEnd = Math.max(longStartBeat, snappedBeat);
+                    if (bStart === bEnd) bEnd += 0.25;
+                    recordUndo();
+                    notes.push({ beat: bStart, endBeat: bEnd, lane: 1, type: 'laneOpacity', opacityStart: getLaneOpacityStartValue(), opacityEnd: getLaneOpacityEndValue() });
+                    longStartBeat = null; longStartLane = null;
+                }
+                return;
+            }
+
             if (currentNoteType === 'guide') {
                 const existingGuideIdx = notes.findIndex(n => n.lane === lane && n.type === 'guide' && snappedBeat >= n.beat && snappedBeat <= n.endBeat);
                 if (existingGuideIdx >= 0 && longStartBeat === null) {
@@ -1521,7 +1553,7 @@
                 }
             }
 
-            const existingIndex = notes.findIndex(n => n.lane === lane && Math.abs(n.beat - snappedBeat) < 0.02 && n.type !== 'long' && n.type !== 'guide');
+            const existingIndex = notes.findIndex(n => n.lane === lane && Math.abs(n.beat - snappedBeat) < 0.02 && n.type !== 'long' && n.type !== 'guide' && n.type !== 'laneOpacity');
             if (existingIndex >= 0) { recordUndo(); notes.splice(existingIndex, 1); return; }
             
             const existingLongIdx = notes.findIndex(n => n.lane === lane && n.type === 'long' && snappedBeat >= n.beat && snappedBeat <= n.endBeat);
@@ -1558,9 +1590,11 @@
         function calculateSelection() {
             const x1 = Math.min(dragStartPos.x, dragCurrentPos.x); const x2 = Math.max(dragStartPos.x, dragCurrentPos.x);
             const y1 = Math.min(dragStartPos.y, dragCurrentPos.y); const y2 = Math.max(dragStartPos.y, dragCurrentPos.y);
-            const isCurrentGuide = (currentNoteType === 'guide');
+            const selectType = currentNoteType === 'guide' ? 'guide' : (currentNoteType === 'laneOpacity' ? 'laneOpacity' : 'note');
             selectedNotes = notes.filter(n => {
-                if (isCurrentGuide !== (n.type === 'guide')) return false;
+                if (selectType === 'guide' && n.type !== 'guide') return false;
+                if (selectType === 'laneOpacity' && n.type !== 'laneOpacity') return false;
+                if (selectType === 'note' && (n.type === 'guide' || n.type === 'laneOpacity')) return false;
                 const nx = START_X + (n.lane - 1) * LANE_WIDTH + LANE_WIDTH / 2; const ny = beatToY(n.beat);
                 return nx >= x1 && nx <= x2 && ny >= y1 && ny <= y2;
             });
@@ -1757,13 +1791,17 @@
                 } else if (currentNoteType === 'guide') {
                     ctx.fillStyle = 'rgba(16, 185, 129, 0.1)'; ctx.fillRect(x, Math.min(ys, ye), LANE_WIDTH, Math.abs(ys - ye));
                     ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)'; ctx.lineWidth = 2; ctx.strokeRect(x, Math.min(ys, ye), LANE_WIDTH, Math.abs(ys - ye));
+                } else if (currentNoteType === 'laneOpacity') {
+                    const left = START_X; const width = TOTAL_LANES * LANE_WIDTH;
+                    ctx.fillStyle = 'rgba(88, 166, 255, 0.14)'; ctx.fillRect(left, Math.min(ys, ye), width, Math.abs(ys - ye));
+                    ctx.strokeStyle = 'rgba(88, 166, 255, 0.65)'; ctx.lineWidth = 2; ctx.strokeRect(left, Math.min(ys, ye), width, Math.abs(ys - ye));
                 }
                 ctx.restore();
             }
 
             for (let i = 0; i < notes.length; i++) {
                 const n = notes[i]; if (n.lane > TOTAL_LANES) continue;
-                if (n.type === 'long' || n.type === 'guide') {
+                if (n.type === 'long' || n.type === 'guide' || n.type === 'laneOpacity') {
                     if (n.endBeat < minRenderBeat - 1 || n.beat > maxRenderBeat + 1) continue;
                 } else { if (n.beat < minRenderBeat - 1 || n.beat > maxRenderBeat + 1) continue; }
                 const x = START_X + (n.lane - 1) * LANE_WIDTH; const isSelected = selectedNotes.includes(n);
@@ -1793,10 +1831,20 @@
                     const ys = beatToY(n.beat); const ye = beatToY(n.endBeat);
                     fillGuideRect(ctx, x, ys, ye, LANE_WIDTH, n);
                     ctx.strokeStyle = getGuideColor(n); ctx.lineWidth = 2; ctx.strokeRect(x, ye, LANE_WIDTH, ys - ye);
+                } else if (n.type === 'laneOpacity') {
+                    const ys = beatToY(n.beat); const ye = beatToY(n.endBeat);
+                    const left = START_X; const width = TOTAL_LANES * LANE_WIDTH;
+                    const os = getLaneOpacityStartValue(n); const oe = getLaneOpacityEndValue(n);
+                    const grad = ctx.createLinearGradient(0, ys, 0, ye);
+                    grad.addColorStop(0, 'rgba(88,166,255,0.08)'); grad.addColorStop(1, 'rgba(88,166,255,0.24)');
+                    ctx.fillStyle = grad; ctx.fillRect(left, Math.min(ys, ye), width, Math.abs(ys - ye));
+                    ctx.strokeStyle = 'rgba(88,166,255,0.8)'; ctx.lineWidth = 2; ctx.strokeRect(left, Math.min(ys, ye), width, Math.abs(ys - ye));
+                    ctx.fillStyle = '#58a6ff'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'left';
+                    ctx.fillText('LANE ' + os + '~' + oe, left + width + 8, Math.min(ys, ye) + 14);
                 }
                 if (isSelected) {
                     const y = beatToY(n.beat); ctx.strokeStyle = '#ffeb3b'; ctx.lineWidth = 2;
-                    if(n.type==='long'||n.type==='guide'){ const ye=beatToY(n.endBeat); ctx.strokeRect(x+2, ye-8, LANE_WIDTH-4, (y-ye)+16); }
+                    if(n.type==='long'||n.type==='guide'||n.type==='laneOpacity'){ const ye=beatToY(n.endBeat); const sx=n.type==='laneOpacity'?START_X:x+2; const sw=n.type==='laneOpacity'?TOTAL_LANES*LANE_WIDTH:LANE_WIDTH-4; ctx.strokeRect(sx, ye-8, sw, (y-ye)+16); }
                     else { ctx.strokeRect(x + 2, y - 8, LANE_WIDTH - 4, 16); }
                 }
             }
@@ -1890,6 +1938,19 @@
                     }
                 });
 
+                DIFFICULTIES.forEach(d => {
+                    const data = chartData[d];
+                    const laneEvents = data.changeEvents.filter(e => e.type === 'LANE').sort((a,b) => (a.beat || 0) - (b.beat || 0));
+                    data.changeEvents = data.changeEvents.filter(e => e.type !== 'LANE');
+                    for (let i = 0; i < laneEvents.length; i++) {
+                        const e = laneEvents[i];
+                        const spec = laneOpacitySpec(e);
+                        const next = laneEvents[i + 1];
+                        if (!spec.range || !next || next.beat <= e.beat) continue;
+                        data.notes.push({ beat: e.beat, endBeat: next.beat, lane: 1, type: 'laneOpacity', opacityStart: spec.from, opacityEnd: spec.to });
+                    }
+                });
+
                 document.getElementById('meta-difficulty').value = currentDifficulty;
                 switchDifficulty(currentDifficulty);
                 clearUndoHistory();
@@ -1935,6 +1996,7 @@
                 dData.notes.forEach(n => {
                     if (n.lane > TOTAL_LANES) return;
                     let lineStr = "";
+                    if (n.type === 'laneOpacity') return;
                     if (n.type === 'long' || n.type === 'guide') {
                         if (n.holdMode === 'holdEnd') n.holdEnd = true;
                         const startSuffix = (n.type === 'long' && n.holdStart) ? 'H' : '';
@@ -2075,4 +2137,6 @@
     </script>
 </body>
 </html>
+
+
 
